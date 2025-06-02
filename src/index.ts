@@ -23,33 +23,33 @@ import {
 
 const getAuthorizationUri =
   (getConfig: GetConnectorConfig): GetAuthorizationUri =>
-  async ({ state, redirectUri }) => {
-    const config = await getConfig(defaultMetadata.id);
-    validateConfig<TelegramConfig>(config, telegramConfigGuard);
-    const tokenParts = config.botToken.split(':');
-    const botId = tokenParts[0];
-    if (!botId) {
-      throw new ConnectorError(ConnectorErrorCodes.InvalidConfig, {
-        error: 'Invalid telegram bot token',
+    async ({ state, redirectUri }) => {
+      const config = await getConfig(defaultMetadata.id);
+      validateConfig<TelegramConfig>(config, telegramConfigGuard);
+      const tokenParts = config.botToken.split(':');
+      const botId = tokenParts[0];
+      if (!botId) {
+        throw new ConnectorError(ConnectorErrorCodes.InvalidConfig, {
+          error: 'Invalid telegram bot token',
+        });
+      }
+
+      // Reconstruct the return_to url
+      const returnTo = new URL('telegram', config.origin);
+
+      // Append state to return_to url
+      returnTo.searchParams.set('state', state);
+
+      const queryParameters = new URLSearchParams({
+        bot_id: botId,
+        origin: config.origin,
+        embed: '1',
+        request_access: scope,
+        return_to: returnTo.toString(),
       });
-    }
 
-    // Reconstruct the return_to url
-    const returnTo = new URL(redirectUri);
-
-    // Append state to return_to url
-    returnTo.searchParams.set('state', state);
-
-    const queryParameters = new URLSearchParams({
-      bot_id: botId,
-      origin: config.origin,
-      embed: '1',
-      request_access: scope,
-      return_to: returnTo.toString(),
-    });
-
-    return `${authorizationEndpoint}?${queryParameters.toString()}`;
-  };
+      return `${authorizationEndpoint}?${queryParameters.toString()}`;
+    };
 
 const authorizationCallbackHandler = async (parameterObject: unknown) => {
   const result = authResponseGuard.safeParse(parameterObject);
@@ -83,40 +83,41 @@ const performTelegramIntegrityCheck = (
 
 const getUserInfo =
   (getConfig: GetConnectorConfig): GetUserInfo =>
-  async (data) => {
-    // Get tgAuthResult from parameterObject
-    const { tgAuthResult } = await authorizationCallbackHandler(data);
+    async (data) => {
+      console.log(data);
+      // Get tgAuthResult from parameterObject
+      const { tgAuthResult } = await authorizationCallbackHandler(data);
 
-    // Get config
-    const config = await getConfig(defaultMetadata.id);
+      // Get config
+      const config = await getConfig(defaultMetadata.id);
 
-    // Validate config
-    validateConfig<TelegramConfig>(config, telegramConfigGuard);
+      // Validate config
+      validateConfig<TelegramConfig>(config, telegramConfigGuard);
 
-    // Decode tgAuthResult from base64 to utf-8 JSON string
-    const decoded = Buffer.from(tgAuthResult, 'base64').toString('utf-8');
+      // Decode tgAuthResult from base64 to utf-8 JSON string
+      const decoded = Buffer.from(tgAuthResult, 'base64').toString('utf-8');
 
-    // Parse JSON string to object
-    const parsed = userInfoResponseGuard.safeParse(parseJson(decoded));
+      // Parse JSON string to object
+      const parsed = userInfoResponseGuard.safeParse(parseJson(decoded));
 
-    // Validate parsed object
-    if (!parsed.success) {
-      throw new ConnectorError(ConnectorErrorCodes.InvalidResponse, parsed.error);
-    }
-    const ok = performTelegramIntegrityCheck(parsed.data, config.botToken);
-    if (!ok) {
-      throw new ConnectorError(ConnectorErrorCodes.AuthorizationFailed, {
-        error: 'Telegram data integrity check failed',
-      });
-    }
+      // Validate parsed object
+      if (!parsed.success) {
+        throw new ConnectorError(ConnectorErrorCodes.InvalidResponse, parsed.error);
+      }
+      const ok = performTelegramIntegrityCheck(parsed.data, config.botToken);
+      if (!ok) {
+        throw new ConnectorError(ConnectorErrorCodes.AuthorizationFailed, {
+          error: 'Telegram data integrity check failed',
+        });
+      }
 
-    return {
-      id: String(parsed.data.id),
-      avatar: parsed.data.photo_url || '',
-      name: parsed.data.username || '',
-      displayName: `${parsed.data.first_name} ${parsed.data.last_name}`.trim() || '',
+      return {
+        id: String(parsed.data.id),
+        avatar: parsed.data.photo_url || '',
+        name: parsed.data.username || '',
+        displayName: `${parsed.data.first_name} ${parsed.data.last_name}`.trim() || '',
+      };
     };
-  };
 
 const createTelegramConnector: CreateConnector<SocialConnector> = async ({ getConfig }) => {
   return {
