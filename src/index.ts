@@ -21,6 +21,18 @@ import {
   authResponseGuard,
 } from './types.js';
 
+const copySearchParams = (sourceUrl: string | URL, targetUrl: string | URL): URL => {
+    const source = new URL(sourceUrl);
+    const target = new URL(targetUrl);
+    
+    // Copy all search parameters
+    source.searchParams.forEach((value, key) => {
+        target.searchParams.set(key, value);
+    });
+    
+    return target;
+}
+
 const getAuthorizationUri =
   (getConfig: GetConnectorConfig): GetAuthorizationUri =>
     async ({ state, redirectUri }) => {
@@ -36,16 +48,15 @@ const getAuthorizationUri =
 
       // Reconstruct the return_to url
       const returnTo = new URL('telegram', config.origin);
-
-      // Append state to return_to url
-      returnTo.searchParams.set('state', state);
+      const returnToUrl = copySearchParams(redirectUri, returnTo);
+      returnToUrl.searchParams.set('state', state);
 
       const queryParameters = new URLSearchParams({
         bot_id: botId,
         origin: config.origin,
         embed: '1',
         request_access: scope,
-        return_to: returnTo.toString(),
+        return_to: returnToUrl.toString(),
       });
 
       return `${authorizationEndpoint}?${queryParameters.toString()}`;
